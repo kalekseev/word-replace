@@ -1,0 +1,21 @@
+﻿<Window x:Class="WordReplace.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MainWindow" Height="387" Width="691" ResizeMode="CanMinimize">
+    <Grid>
+        <StackPanel Name="DropBox" Drop="DropBox_Drop" AllowDrop="True" HorizontalAlignment="Left" Height="235" Margin="60,38,0,0" VerticalAlignment="Top" Width="271" RenderTransformOrigin="0.5,0.5" Background="#FF5B6EE6" MouseLeftButtonDown="DropBox_MouseUp"/>
+        <ListBox Name="FileListBox" HorizontalAlignment="Left" Height="235" Margin="368,38,0,0" VerticalAlignment="Top" Width="269">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <TextBlock Text="{Binding Name}" ToolTip="{Binding Path}"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <Rectangle Fill="#FFF4F4F5" HorizontalAlignment="Left" Height="30" Margin="62,303,0,0" Stroke="Black" VerticalAlignment="Top" Width="421"/>
+        <Label Name="OutputLabel" Content="Сохранять результат в:" HorizontalAlignment="Left" Margin="64,304,0,0" VerticalAlignment="Top" Width="418" Height="28" MouseLeftButtonUp="Label_MouseLeftButtonUp"/>
+        <Button Name="RunButton" Content="Button" HorizontalAlignment="Left" Margin="533,304,0,0" VerticalAlignment="Top" Width="75" Click="Button_Click" IsEnabled="False"/>
+
+    </Grid>
+</Window>
