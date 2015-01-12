@@ -16,7 +16,8 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.IO;
 using System.Data;
-using Excel;
+using System.Text.RegularExpressions;
+using OfficeOpenXml;
 using Novacode;
 
 namespace WordReplace
@@ -70,6 +71,7 @@ namespace WordReplace
                         if (newExcel != null)
                         {
                             inputExcelFile = newExcel;
+                            readXls(inputExcelFile.Path);
                         }
                     }
                     CheckIsRunEnabled();
@@ -113,35 +115,60 @@ namespace WordReplace
             if (result == true) 
             {
                 outPath = vm.SelectedFolder.Path;
-                OutputLabel.Content = String.Format("Сохранять результат в: {0}", outPath.ToString());
+                OutputLabel.Content = outPath.ToString();
                 IsOutputPathSelected = true;
                 CheckIsRunEnabled();
+            }
+        }
+
+        public static DataSet getDataTableFromExcel(string path)
+        {
+            using (var pck = new OfficeOpenXml.ExcelPackage())
+            {
+                using (var stream = File.OpenRead(path))
+                {
+                    pck.Load(stream);
+                }
+                var dSet = new DataSet();
+                foreach (var ws in pck.Workbook.Worksheets)
+                {
+                    DataTable tbl = dSet.Tables.Add(ws.Name);
+                    foreach (var firstRowCell in ws.Cells[1, 1, 1, ws.Dimension.End.Column])
+                    {
+                        tbl.Columns.Add(firstRowCell.Text);
+                    }
+                    for (var rowNum = 2; rowNum <= ws.Dimension.End.Row; rowNum++)
+                    {
+                        var wsRow = ws.Cells[rowNum, 1, rowNum, ws.Dimension.End.Column];
+                        var row = tbl.NewRow();
+                        foreach (var cell in wsRow)
+                        {
+                            row[cell.Start.Column - 1] = cell.Text;
+                        }
+                        tbl.Rows.Add(row);
+                    }
+                    break;
+                }
+                return dSet;
             }
         }
 
         private void readXls(String fileName)
         {
             var file = new FileInfo(fileName);
-            using (var stream = new FileStream(fileName, FileMode.Open))
-            {
-                IExcelDataReader reader = null;
-                if (file.Extension == ".xls")
-                {
-                    reader = ExcelReaderFactory.CreateBinaryReader(stream);
-                }
-                else if (file.Extension == ".xlsx")
-                {
-                    reader = ExcelReaderFactory.CreateOpenXmlReader(stream);
-                }
+            ds = getDataTableFromExcel(fileName);
 
-                if (reader == null)
-                    Console.WriteLine("fail");
-
-                reader.IsFirstRowAsColumnNames = true;
-                ds = reader.AsDataSet();
-
-            }
-
+            var cols = ds.Tables[0].Columns;
+            List<string> colNames = new List<string>();
+            colNames.Add("---");
+            foreach (DataColumn col in cols)
+                colNames.Add(col.ColumnName);
+            FileNameSelect1.ItemsSource = colNames;
+            FileNameSelect1.SelectedIndex = 0;
+            FileNameSelect2.ItemsSource = colNames;
+            FileNameSelect2.SelectedIndex = 0;
+            FileNameSelect3.ItemsSource = colNames;
+            FileNameSelect3.SelectedIndex = 0;
         }
 
         private IList<string> GetTablenames(DataTableCollection tables)
@@ -155,7 +182,7 @@ namespace WordReplace
         }
 
 
-        private void Process(string SheetName, UserDoc userDoc)
+        private void Process(UserDoc userDoc)
         {
             using (var stream = new MemoryStream())
             {
@@ -165,26 +192,65 @@ namespace WordReplace
                 }
 
                 var template = new DocTemplate(stream);
-                var cols = ds.Tables[SheetName].Columns;
+                var tbl = ds.Tables[0];
+                var cols = tbl.Columns;
+                List<ComboBoxInfo> cbs = new List<ComboBoxInfo>();
+                cbs.Add(new ComboBoxInfo { Index = FileNameSelect1.SelectedIndex, Name = (FileNameSelect1.SelectedItem as string) });
+                cbs.Add(new ComboBoxInfo { Index = FileNameSelect2.SelectedIndex, Name = (FileNameSelect1.SelectedItem as string) });
+                cbs.Add(new ComboBoxInfo { Index = FileNameSelect3.SelectedIndex, Name = (FileNameSelect1.SelectedItem as string) });
 
                 System.Threading.Tasks.Parallel.ForEach(
-                    Enumerable.Range(0, ds.Tables[SheetName].Rows.Count),
+                    Enumerable.Range(0, tbl.Rows.Count),
                     i =>
                     {
-                        var bm = new BindMap(ds.Tables[SheetName].Rows[i], cols);
-                        template.CreateDocument(System.IO.Path.Combine(outPath, (i + 1).ToString() + ".docx"), bm);
+                        var bm = new BindMap(tbl.Rows[i], cols);
+                        template.CreateDocument(buildOutputPath(cbs, bm, i), bm);
                     }
                 );
             }
 
         }
 
+        private void addField(List<string> names, ComboBoxInfo comboBox, BindMap bm)
+        {
+            if (comboBox.Index > 0)
+            {
+                var key = comboBox.Name as string;
+                try
+                {
+                    names.Add(bm.Get(key));
+                }
+                catch { }
+            }
+        }
+
+        private string buildOutputPath(List<ComboBoxInfo> cbs, BindMap bm, int i)
+        {
+            List<string> names = new List<string>();
+            foreach (ComboBoxInfo cb in cbs)
+                addField(names, cb, bm);
+
+
+            Regex rgxBadChar = new Regex(@"[^\w-]");
+            Regex rgxWhiteSpace = new Regex(@"\s+");
+            string result = String.Join("-", names);
+            result = rgxWhiteSpace.Replace(result, "_");
+            result = rgxBadChar.Replace(result, "");
+            result += "-" + (i + 1).ToString() + ".docx";
+            return System.IO.Path.Combine(outPath, result);
+        }
+
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            readXls(inputExcelFile.Path);
-            var tablenames = GetTablenames(ds.Tables);
-            Process(tablenames[0], inputDocFiles[0]);
+
+            Process(inputDocFiles[0]);
         }
+    }
+
+    public class ComboBoxInfo
+    {
+        public int Index { get; set; }
+        public string Name { get; set; }
     }
 
 }
