@@ -19,6 +19,8 @@ using System.Data;
 using System.Text.RegularExpressions;
 using OfficeOpenXml;
 using Novacode;
+using System.ComponentModel;
+using System.Threading;
 
 namespace WordReplace
 {
@@ -27,20 +29,42 @@ namespace WordReplace
     /// </summary>
     public partial class MainWindow : Window
     {
-        private ObservableCollection<UserDoc> inputDocFiles = new ObservableCollection<UserDoc>();
+        private ObservableCollection<UserInputFile> inputDocFiles = new ObservableCollection<UserInputFile>();
         private UserExcel inputExcelFile;
         private DataSet ds;
         private string outPath;
         private FileHandler fh = new FileHandler();
         private Boolean IsOutputPathSelected = false;
-        
+        private ProgressWindow pWin = new ProgressWindow();
+        private List<ComboBoxInfo> cbs = new List<ComboBoxInfo>();
+        private CancellationTokenSource cts;
+
+
         public MainWindow()
         {
-
             InitializeComponent();
+            inputDocFiles.Add(new UserExcel("D:\\No excel file provided"));
             FileListBox.ItemsSource = inputDocFiles;
+        }
 
+        private void OnLoaded(object sender, EventArgs eventArgs)
+        {
+            pWin.Owner = this;
+            pWin.Closing += new CancelEventHandler(OnProgressClosing);
+        }
 
+        private void OnClosing(object sender, EventArgs eventArgs)
+        {
+            pWin.Close();
+        }
+
+        private void OnProgressClosing(object sender, CancelEventArgs e)
+        {
+            e.Cancel = true;
+            if (cts != null)
+            {
+                cts.Cancel();
+            }
         }
 
         private void DropBox_Drop(object sender, DragEventArgs e)
@@ -63,7 +87,7 @@ namespace WordReplace
 
                     if (newDoс != null)
                     {
-                        inputDocFiles.Add(newDoс);
+                        inputDocFiles.Add(newFile);
                     }
                     else
                     {
@@ -72,6 +96,7 @@ namespace WordReplace
                         {
                             inputExcelFile = newExcel;
                             readXls(inputExcelFile.Path);
+                            inputDocFiles[0] = newFile;
                         }
                     }
                     CheckIsRunEnabled();
@@ -87,7 +112,7 @@ namespace WordReplace
 
         private void CheckIsRunEnabled()
         {
-            if (inputExcelFile != null && inputDocFiles.Count > 0 && IsOutputPathSelected)
+            if (inputExcelFile != null && inputDocFiles.Count > 1 && IsOutputPathSelected)
             {
                 RunButton.IsEnabled = true;
             }
@@ -108,13 +133,14 @@ namespace WordReplace
 
         private void Label_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            var folderDialog = new Gat.Controls.OpenDialogView();
-            var vm = (Gat.Controls.OpenDialogViewModel)folderDialog.DataContext;
-            vm.IsDirectoryChooser = true;
-            bool? result = vm.Show();
-            if (result == true) 
+            var folderDialog = new System.Windows.Forms.FolderBrowserDialog();
+            folderDialog.Description = "Select output path";
+            folderDialog.SelectedPath = outPath;
+            folderDialog.ShowNewFolderButton = true;
+            System.Windows.Forms.DialogResult result = folderDialog.ShowDialog();
+            if (result == System.Windows.Forms.DialogResult.OK)
             {
-                outPath = vm.SelectedFolder.Path;
+                outPath = folderDialog.SelectedPath;
                 OutputLabel.Content = outPath.ToString();
                 IsOutputPathSelected = true;
                 CheckIsRunEnabled();
@@ -182,8 +208,9 @@ namespace WordReplace
         }
 
 
-        private void Process(UserDoc userDoc)
+        private void Process(object sender, EventArgs e)
         {
+            UserDoc userDoc = inputDocFiles[1] as UserDoc;
             using (var stream = new MemoryStream())
             {
                 using (var fileStream = new FileStream(userDoc.Path, FileMode.Open))
@@ -194,63 +221,90 @@ namespace WordReplace
                 var template = new DocTemplate(stream);
                 var tbl = ds.Tables[0];
                 var cols = tbl.Columns;
-                List<ComboBoxInfo> cbs = new List<ComboBoxInfo>();
-                cbs.Add(new ComboBoxInfo { Index = FileNameSelect1.SelectedIndex, Name = (FileNameSelect1.SelectedItem as string) });
-                cbs.Add(new ComboBoxInfo { Index = FileNameSelect2.SelectedIndex, Name = (FileNameSelect1.SelectedItem as string) });
-                cbs.Add(new ComboBoxInfo { Index = FileNameSelect3.SelectedIndex, Name = (FileNameSelect1.SelectedItem as string) });
 
-                System.Threading.Tasks.Parallel.ForEach(
-                    Enumerable.Range(0, tbl.Rows.Count),
-                    i =>
+                ParallelOptions po = new ParallelOptions();
+                cts = new CancellationTokenSource();
+                po.CancellationToken = cts.Token;
+                List<Tuple<BindMap, string>> rows = Enumerable.Range(0, tbl.Rows.Count)
+                    .Select(i =>
                     {
                         var bm = new BindMap(tbl.Rows[i], cols);
-                        template.CreateDocument(buildOutputPath(cbs, bm, i), bm);
+                        return new Tuple<BindMap, string>(bm, buildOutputPath(bm));
+                    })
+                    .GroupBy(row => row.Item2)
+                    .SelectMany(group =>
+                    {
+                        return Enumerable.Range(0, group.Count())
+                            .Zip(group, (i, row) => {
+                                string outName = userDoc.NoExtName;
+                                if (!String.IsNullOrWhiteSpace(row.Item2))
+                                    outName += "-" + row.Item2;
+                                if (i > 0)
+                                    outName += "-" + i.ToString();
+                                outName = outName + ".docx";
+                                outName = System.IO.Path.Combine(outPath, outName);
+                                return new Tuple<BindMap, string>(row.Item1, outName);
+                            });
+                    }).ToList();
+                System.Threading.Tasks.Parallel.ForEach(
+                    rows,
+                    po,
+                    row =>
+                    {
+                        template.CreateDocument(row.Item2, row.Item1);
+                        //(sender as BackgroundWorker).ReportProgress((100 / tbl.Rows.Count) * (i + 1));
                     }
                 );
             }
 
         }
 
-        private void addField(List<string> names, ComboBoxInfo comboBox, BindMap bm)
+        private string buildOutputPath(BindMap bm)
         {
-            if (comboBox.Index > 0)
-            {
-                var key = comboBox.Name as string;
-                try
-                {
-                    names.Add(bm.Get(key));
-                }
-                catch { }
-            }
-        }
-
-        private string buildOutputPath(List<ComboBoxInfo> cbs, BindMap bm, int i)
-        {
-            List<string> names = new List<string>();
-            foreach (ComboBoxInfo cb in cbs)
-                addField(names, cb, bm);
-
+            List<string> names = cbs
+                .Where(cb => cb.Index > 0)
+                .Select(cb => {
+                    var name = cb.Name as string;
+                    return bm.Get(name, "");
+                })
+                .Where(name => !String.IsNullOrWhiteSpace(name))
+                .ToList();
 
             Regex rgxBadChar = new Regex(@"[^\w-]");
             Regex rgxWhiteSpace = new Regex(@"\s+");
             string result = String.Join("-", names);
             result = rgxWhiteSpace.Replace(result, "_");
             result = rgxBadChar.Replace(result, "");
-            result += "-" + (i + 1).ToString() + ".docx";
-            return System.IO.Path.Combine(outPath, result);
+            return result;
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-
-            Process(inputDocFiles[0]);
+            MainGrid.IsEnabled = false;
+            pWin.Reset();
+            pWin.Show();
+            cbs.Clear();
+            cbs.Add(new ComboBoxInfo { Index = FileNameSelect1.SelectedIndex, Name = (FileNameSelect1.SelectedItem as string) });
+            cbs.Add(new ComboBoxInfo { Index = FileNameSelect2.SelectedIndex, Name = (FileNameSelect2.SelectedItem as string) });
+            cbs.Add(new ComboBoxInfo { Index = FileNameSelect3.SelectedIndex, Name = (FileNameSelect3.SelectedItem as string) });
+            BackgroundWorker worker = new BackgroundWorker();
+            worker.WorkerReportsProgress = true;
+            worker.DoWork += Process;
+            worker.ProgressChanged += pWin.Update;
+            worker.RunWorkerAsync();
+            worker.RunWorkerCompleted += ProcessFinished;
         }
-    }
+
+        private void ProcessFinished(object sender, RunWorkerCompletedEventArgs e)
+        {
+            pWin.Hide();
+            MainGrid.IsEnabled = true;
+        }
+    } 
 
     public class ComboBoxInfo
     {
         public int Index { get; set; }
         public string Name { get; set; }
     }
-
 }

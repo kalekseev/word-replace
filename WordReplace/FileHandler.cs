@@ -49,10 +49,11 @@ namespace WordReplace
 
     public class UserDoc : UserInputFile
     {
+        public string NoExtName { get; set; }
         public UserDoc(string path)
             : base(path)
         {
-
+            this.NoExtName = System.IO.Path.GetFileNameWithoutExtension(Path);
         }
     }
 }
