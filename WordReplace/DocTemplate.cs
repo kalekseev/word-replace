@@ -1,13 +1,9 @@
-﻿using System;
+﻿using Novacode;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
-using System.Data;
 using System.IO;
-using Novacode;
+using System.Linq;
+using System.Text.RegularExpressions;
+
 
 namespace WordReplace
 {
@@ -45,6 +41,7 @@ namespace WordReplace
         private MemoryStream stream;
         private List<List<Binding>> bindings;
         private static char[] TRIM_CHARS = { ' ', '{', '}' };
+        private static object syncStream = new object();
 
         public DocTemplate(MemoryStream Stream)
         {
@@ -55,7 +52,7 @@ namespace WordReplace
         public void CreateDocument(string outPath, BindMap bm)
         {
             var outDoc = DocX.Create(outPath);
-            lock (stream)
+            lock (syncStream)
                 outDoc.ApplyTemplate(stream);
             List<Paragraph> ps = CollectParagraphs(outDoc);
 
