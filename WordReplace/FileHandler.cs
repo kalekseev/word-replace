@@ -60,6 +60,7 @@ namespace WordReplace
                 {
                     pck.Load(stream);
                 }
+                string cellText;
                 foreach (var ws in pck.Workbook.Worksheets)
                 {
                     DataTable tbl = ds.Tables.Add(ws.Name);
@@ -73,7 +74,17 @@ namespace WordReplace
                         var row = tbl.NewRow();
                         foreach (var cell in wsRow)
                         {
-                            row[cell.Start.Column - 1] = cell.Text;
+                            
+                            try
+                            {
+                                cellText = cell.Text;
+                            }
+                            catch (ArgumentOutOfRangeException exc)
+                            {
+                                cellText = cell.Value.ToString();
+                                Console.WriteLine(String.Format("Can't get Text of cell {0} ({1})", cell.Address, exc.Message));
+                            }
+                            row[cell.Start.Column - 1] = cellText;
                         }
                         tbl.Rows.Add(row);
                     }
@@ -107,12 +118,13 @@ namespace WordReplace
                     return Enumerable.Range(0, group.Count())
                         .Zip(group, (i, row) =>
                         {
-                            string outName = NoExtName;
+                            List<string> parts = new List<string>();
                             if (!String.IsNullOrWhiteSpace(row.Item2))
-                                outName += "-" + row.Item2;
+                                parts.Add(row.Item2);
+                            parts.Add(NoExtName);
                             if (i > 0)
-                                outName += "-" + i.ToString();
-                            outName = outName + ".docx";
+                                parts.Add(i.ToString());
+                            string outName = String.Join("-", parts) + ".docx";
                             outName = System.IO.Path.Combine(outPath, outName);
                             return new Tuple<BindMap, string>(row.Item1, outName);
                         });

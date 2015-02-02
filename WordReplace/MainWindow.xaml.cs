@@ -122,6 +122,10 @@ namespace WordReplace
                 {
 
                 }
+                catch (IOException exc)
+                {
+                    MessageBoxResult result = MessageBox.Show(exc.Message, "Error");
+                }
                 
             }
         }
