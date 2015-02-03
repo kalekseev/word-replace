@@ -115,18 +115,19 @@ namespace WordReplace
                             FileNameSelect3.SelectedIndex = 0;
                         }
                     }
-                    CheckIsRunEnabled();
-                    
+                    CheckIsRunEnabled();   
                 }
                 catch (ArgumentException)
                 {
-
                 }
                 catch (IOException exc)
                 {
                     MessageBoxResult result = MessageBox.Show(exc.Message, "Error");
                 }
-                
+                catch (DuplicateNameException exc)
+                {
+                    MessageBoxResult result = MessageBox.Show(exc.Message, "Error");
+                }
             }
         }
 

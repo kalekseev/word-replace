@@ -66,8 +66,20 @@ namespace WordReplace
                     DataTable tbl = ds.Tables.Add(ws.Name);
                     foreach (var firstRowCell in ws.Cells[1, 1, 1, ws.Dimension.End.Column])
                     {
-                        tbl.Columns.Add(firstRowCell.Text);
+                        try
+                        {
+                            tbl.Columns.Add(firstRowCell.Text);
+                        }
+                        catch (DuplicateNameException exc)
+                        {
+                            //TODO: refactor
+                            throw exc;
+                        }
+
                     }
+                    Enumerable.Range(tbl.Columns.Count, ws.Dimension.End.Column - tbl.Columns.Count)
+                        .ToList()
+                        .ForEach(i => tbl.Columns.Add("Column" + i));
                     for (var rowNum = 2; rowNum <= ws.Dimension.End.Row; rowNum++)
                     {
                         var wsRow = ws.Cells[rowNum, 1, rowNum, ws.Dimension.End.Column];
