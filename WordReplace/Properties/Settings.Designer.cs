@@ -22,5 +22,17 @@ namespace WordReplace.Properties {
                 return defaultInstance;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string outPath {
+            get {
+                return ((string)(this["outPath"]));
+            }
+            set {
+                this["outPath"] = value;
+            }
+        }
     }
 }

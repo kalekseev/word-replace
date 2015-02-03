@@ -19,7 +19,7 @@ namespace WordReplace
     {
         private ObservableCollection<UserInputFile> inputDocFiles = new ObservableCollection<UserInputFile>();
         private UserExcel inputExcelFile;
-        private string outPath;
+        private string outPath = Properties.Settings.Default.outPath;
         private ProgressWindow pWin = new ProgressWindow();
         private List<string> columnNames = new List<string>();
         private CancellationTokenSource cts;
@@ -37,6 +37,7 @@ namespace WordReplace
         {
             pWin.Owner = this;
             pWin.Closing += new CancelEventHandler(OnProgressClosing);
+            OutputLabel.Content = outPath;
         }
 
         private void OnProgressClosing(object sender, CancelEventArgs e)
@@ -133,8 +134,7 @@ namespace WordReplace
 
         private void CheckIsRunEnabled()
         {
-            if (inputExcelFile != null && inputDocFiles.Count > 1 && outPath != null)
-                RunButton.IsEnabled = true;
+            RunButton.IsEnabled = (inputExcelFile != null && inputDocFiles.Count > 1 && outPath != null);
         }
 
         private void DropBox_MouseUp(object sender, MouseButtonEventArgs e)
@@ -160,7 +160,9 @@ namespace WordReplace
             if (result == System.Windows.Forms.DialogResult.OK)
             {
                 outPath = folderDialog.SelectedPath;
-                OutputLabel.Content = outPath.ToString();
+                OutputLabel.Content = outPath;
+                Properties.Settings.Default.outPath = outPath;
+                Properties.Settings.Default.Save();
                 CheckIsRunEnabled();
             }
         }
@@ -181,7 +183,8 @@ namespace WordReplace
                     cts = new CancellationTokenSource();
                     po.CancellationToken = cts.Token;
                     IEnumerable<BindMap> rows = Enumerable.Range(0, tbl.Rows.Count)
-                        .Select(i => new BindMap(tbl.Rows[i], tbl.Columns));
+                        .Select(i => new BindMap(tbl.Rows[i], tbl.Columns))
+                        .Where(bm => !bm.isEmpty());
                     List<Tuple<BindMap, string>> rowsWithName = userDoc.MapOutputNames(rows, outPath, columnNames);
 
                     System.Threading.Tasks.Parallel.ForEach(
@@ -213,6 +216,16 @@ namespace WordReplace
             worker.ProgressChanged += pWin.Update;
             worker.RunWorkerAsync();
             worker.RunWorkerCompleted += ProcessFinished;
+        }
+
+        private void Clear_SelectedDocuments(object sender, RoutedEventArgs e)
+        {
+            inputDocFiles.Clear();
+            inputDocFiles.Add(new UserExcel("D:\\No excel file provided", true));
+            FileNameSelect1.ItemsSource = null;
+            FileNameSelect2.ItemsSource = null;
+            FileNameSelect3.ItemsSource = null;
+            CheckIsRunEnabled();
         }
     } 
 }

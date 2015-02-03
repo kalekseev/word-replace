@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Data;
 using System.Runtime.Serialization;
 
@@ -26,6 +28,11 @@ namespace WordReplace
         {
             Row = row;
             Cols = cols;
+        }
+
+        public Boolean isEmpty() {
+            var lst = new List<Object>(Row.ItemArray);
+            return lst.TrueForAll(cell => String.IsNullOrEmpty(cell.ToString()));
         }
 
         public string Get(string key)

@@ -27,6 +27,7 @@
             </Grid>
         </GroupBox>
         <Button Name="RunButton" Content="Create documents" HorizontalAlignment="Left" Margin="490,349,0,0" Width="163" Click="Button_Click" IsEnabled="False" Foreground="Black" BorderBrush="Black" FontSize="16" Height="76" VerticalAlignment="Top"/>
+        <Button Content="Clear selected" Margin="490,293,32,0" VerticalAlignment="Top" Height="30" FontSize="16" Click="Clear_SelectedDocuments"/>
 
     </Grid>
 </Window>

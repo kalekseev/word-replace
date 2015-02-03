@@ -38,7 +38,7 @@ namespace WordReplace
         }
     }
 
-    public class UserExcel : UserInputFile
+    public class UserExcel : UserInputFile, IDisposable
     {
         public DataSet ds = new DataSet();
         private bool fake = false;
@@ -50,6 +50,20 @@ namespace WordReplace
                 getDataTableFromExcel();
             }
             this.fake = fake;
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                ds.Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         private void getDataTableFromExcel()
@@ -70,10 +84,10 @@ namespace WordReplace
                         {
                             tbl.Columns.Add(firstRowCell.Text);
                         }
-                        catch (DuplicateNameException exc)
+                        catch (DuplicateNameException)
                         {
                             //TODO: refactor
-                            throw exc;
+                            throw;
                         }
 
                     }
@@ -108,7 +122,7 @@ namespace WordReplace
 
     public class UserDoc : UserInputFile
     {
-        private static Regex RGX_BAD_CHAR = new Regex(@"[^\w-]");
+        private static Regex RGX_BAD_CHAR = new Regex(@"[^\w\.\s\-]");
         private static Regex RGX_WHITESPACE = new Regex(@"\s+");
 
         public string NoExtName { get; set; }
@@ -151,7 +165,7 @@ namespace WordReplace
                 .ToList();
 
             string result = String.Join("-", names);
-            result = RGX_WHITESPACE.Replace(result, "_");
+            result = RGX_WHITESPACE.Replace(result, " ");
             result = RGX_BAD_CHAR.Replace(result, "");
             return result;
         }
